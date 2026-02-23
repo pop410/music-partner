@@ -2,7 +2,7 @@
     "display_name": "网易云音乐伴侣",
     "author": "pop410",
     "version": "1.0.0",
-    "homePage": "https://github.com/pop410/music_partner",
+    "homePage": "https://github.com/pop410/music-partner",
     "js": "dist/index.js",
     "css": "dist/index.css",
     "loading_order": 100,
