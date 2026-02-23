@@ -1,0 +1,123 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const { cloudsearch, lyric, song_url, login_status, login_cellphone, user_playlist, playlist_detail } = require('NeteaseCloudMusicApi');
+
+const app = express();
+const port = 3000;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+// Helper function to call Netease API
+const callApi = async (func, query, res) => {
+  try {
+    const result = await func({
+      ...query,
+      cookie: query.cookie || ''
+    });
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Search
+app.post('/search', (req, res) => {
+  callApi(cloudsearch, req.body, res);
+});
+
+// Lyric
+app.post('/lyric', (req, res) => {
+  callApi(lyric, req.body, res);
+});
+
+// Song URL
+app.post('/url', (req, res) => {
+  callApi(song_url, req.body, res);
+});
+
+// Login Status
+app.post('/login/status', (req, res) => {
+  callApi(login_status, req.body, res);
+});
+
+// Login (Cellphone) - Optional, for getting cookie
+app.post('/login/cellphone', (req, res) => {
+  callApi(login_cellphone, req.body, res);
+});
+
+// User Playlist
+app.post('/user/playlist', (req, res) => {
+  callApi(user_playlist, req.body, res);
+});
+
+// Playlist Detail
+app.post('/playlist/detail', (req, res) => {
+  callApi(playlist_detail, req.body, res);
+});
+
+// Get current playback status from Windows Media Control (simulated for now)
+// To use real Windows Media Control API, install @nodert-win11/windows.media.control
+const getCurrentPlayback = async () => {
+  const useRealApi = process.env.USE_REAL_MEDIA_API === 'true';
+  if (useRealApi) {
+    try {
+      // Attempt to load Windows.Media.Control module
+      const { GlobalSystemMediaTransportControlsSessionManager } = require('@nodert-win11/windows.media.control');
+      const manager = await GlobalSystemMediaTransportControlsSessionManager.requestAsync();
+      const sessions = manager.getSessions();
+      if (sessions.length > 0) {
+        const session = sessions[0]; // Use the first session (most likely the active media app)
+        const playbackInfo = session.getPlaybackInfo();
+        const mediaProperties = await session.tryGetMediaPropertiesAsync();
+        return {
+          isPlaying: playbackInfo.playbackStatus === 4, // 4 = Playing, see Windows.Media.MediaPlaybackStatus
+          title: mediaProperties.title || '',
+          artist: mediaProperties.artist || '',
+          album: mediaProperties.albumTitle || '',
+          // Additional fields can be added
+        };
+      }
+    } catch (error) {
+      console.warn('Failed to use real Windows Media Control API, falling back to mock data:', error.message);
+    }
+  }
+  // Mock data - replace with real Windows.Media.Control API
+  return {
+    isPlaying: true,
+    title: "还是会寂寞",
+    artist: "陈绮贞",
+    album: "Demo",
+    // Add more fields as needed
+  };
+};
+
+app.post('/current', async (req, res) => {
+  try {
+    const playback = await getCurrentPlayback();
+    // If we have title and artist, try to search for the song on Netease
+    if (playback.title && playback.artist) {
+      const searchRes = await cloudsearch({
+        keywords: `${playback.title} ${playback.artist}`,
+        limit: 1,
+        cookie: req.body.cookie || ''
+      });
+      if (searchRes.result && searchRes.result.songs && searchRes.result.songs.length > 0) {
+        const song = searchRes.result.songs[0];
+        playback.neteaseId = song.id;
+        playback.duration = song.dt;
+        playback.coverUrl = song.al.picUrl;
+      }
+    }
+    res.json(playback);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Music Tavern Bridge running at http://localhost:${port}`);
+});

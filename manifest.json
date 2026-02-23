@@ -1,0 +1,13 @@
+{
+    "display_name": "网易云音乐伴侣",
+    "author": "pop410",
+    "version": "1.0.0",
+    "homePage": "https://github.com/pop410/music_partner",
+    "js": "dist/index.js",
+    "css": "dist/index.css",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "auto_update": true,
+    "minimum_client_version": "1.12.13"
+}
