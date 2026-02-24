@@ -68,15 +68,10 @@ app.post('/login/cellphone', async (req, res) => {
     }
   }
   try {
-    const { phone, password, md5_password, captcha } = req.body || {};
-    if (!phone || (!password && !md5_password)) {
-      return res.status(400).json({ error: 'Missing phone or password' });
-    }
     const result = await login_cellphone({
-      phone,
-      password,
-      md5_password,
-      captcha,
+      phone: req.body.phone,
+      password: req.body.password,
+      md5_password: req.body.md5_password,
     });
     const body = result?.body || {};
     const cookie =
@@ -90,11 +85,7 @@ app.post('/login/cellphone', async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    const code = error?.body?.code;
-    if (code && typeof code === 'number') {
-      return res.status(400).json({ error: error.message, code });
-    }
-    res.status(502).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
