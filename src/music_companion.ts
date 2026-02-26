@@ -1672,11 +1672,13 @@ const FloatingBall = {
     this.isVisible = true;
 
     let moved = false;
-    let pressTimer: number | null = null;
+    let pointerStartX = 0;
+    let pointerStartY = 0;
 
     const startDrag = (clientX: number, clientY: number) => {
         this.isDragging = true;
-        moved = false;
+        pointerStartX = clientX;
+        pointerStartY = clientY;
         this.dragStartX = clientX - this.element!.getBoundingClientRect().left;
         this.dragStartY = clientY - this.element!.getBoundingClientRect().top;
         this.element!.style.transition = 'none';
@@ -1686,16 +1688,18 @@ const FloatingBall = {
 
     // 鼠标事件
     this.element.addEventListener('mousedown', (e) => {
+      moved = false;
       startDrag(e.clientX, e.clientY);
     });
 
     // 触摸事件
     this.element.addEventListener('touchstart', (e) => {
       if (e.touches.length === 1) {
-        startDrag(e.touches[0].clientX, e.touches[0].clientY);
-        e.preventDefault();
+        moved = false;
+        pointerStartX = e.touches[0].clientX;
+        pointerStartY = e.touches[0].clientY;
       }
-    }, { passive: false });
+    }, { passive: true });
 
     const onMove = (clientX: number, clientY: number) => {
       if (!this.isDragging) return;
@@ -1707,9 +1711,7 @@ const FloatingBall = {
       newX = Math.max(0, Math.min(newX, window.innerWidth - ballRect.width));
       newY = Math.max(0, Math.min(newY, window.innerHeight - ballRect.height));
 
-      if (Math.abs(newX - (this.lastX + this.dragStartX)) > 5 || Math.abs(newY - (this.lastY + this.dragStartY)) > 5) {
-        moved = true;
-      }
+      moved = moved || Math.abs(clientX - pointerStartX) > 6 || Math.abs(clientY - pointerStartY) > 6;
 
       this.element!.style.left = `${newX}px`;
       this.element!.style.top = `${newY}px`;
@@ -1721,7 +1723,21 @@ const FloatingBall = {
 
     window.addEventListener('touchmove', (e) => {
       if (e.touches.length === 1) {
-        onMove(e.touches[0].clientX, e.touches[0].clientY);
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        if (!this.isDragging) {
+          const dx = x - pointerStartX;
+          const dy = y - pointerStartY;
+          if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+            moved = true;
+            if (MusicWindow.isVisible) MusicWindow.hide();
+            startDrag(x, y);
+          } else {
+            return;
+          }
+        }
+        onMove(x, y);
+        e.preventDefault();
       }
     });
 
