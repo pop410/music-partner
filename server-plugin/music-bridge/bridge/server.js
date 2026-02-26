@@ -438,63 +438,64 @@ app.get('/mobile/tasker.xml', (req, res) => {
   const localIp = getLocalIp();
   const baseUrl = `http://${localIp}:${port}`;
   const token = apiToken || '';
-  // Tasker Project: Notification -> HTTP Request
+  // Tasker Project using modern "HTTP Request" action
   const xml = `<?xml version="1.0" encoding="utf-8"?>
-<TaskerData sr="" dvi="1" tv="5.15.5">
-  <Profile sr="prof1" ve="2">
-    <cdate>1672531200000</cdate>
-    <edate>1672531200000</edate>
-    <flags>8</flags>
-    <id>1</id>
-    <mid0>101</mid0>
-    <nme>云音乐推送</nme>
-    <Event sr="con0" ve="2">
-      <code>461</code>
-      <App sr="arg0">
-        <appPkg>com.netease.cloudmusic</appPkg>
-        <label>网易云音乐</label>
-      </App>
-      <Str sr="arg1" ve="3"/>
-      <Int sr="arg2" val="0"/>
-      <Str sr="arg3" ve="3"/>
-    </Event>
-  </Profile>
-  <Task sr="task101" ve="2">
-    <cdate>1672531200000</cdate>
-    <edate>1672531200000</edate>
-    <id>101</id>
-    <nme>上报播放</nme>
-    <Action sr="act0" ve="7">
-      <code>339</code>
-      <Bundle sr="arg0">
-        <Vals sr="val">
-          <net.dinglisch.android.tasker.HTTP_URI>${baseUrl}/device/push</net.dinglisch.android.tasker.HTTP_URI>
-          <net.dinglisch.android.tasker.HTTP_METHOD>POST</net.dinglisch.android.tasker.HTTP_METHOD>
-          <net.dinglisch.android.tasker.HTTP_HEADERS>Authorization: Bearer ${token}</net.dinglisch.android.tasker.HTTP_HEADERS>
-          <net.dinglisch.android.tasker.HTTP_TIMEOUT>10</net.dinglisch.android.tasker.HTTP_TIMEOUT>
-          <net.dinglisch.android.tasker.HTTP_DATA>{"title":"%evtprm1","artist":"%evtprm2","album":"","coverUrl":"","isPlaying":true}</net.dinglisch.android.tasker.HTTP_DATA>
-        </Vals>
-      </Bundle>
-      <Int sr="arg1" val="0"/>
-      <Int sr="arg10" val="0"/>
-      <Int sr="arg11" val="0"/>
-      <Str sr="arg2" ve="3"/>
-      <Int sr="arg3" val="0"/>
-      <Int sr="arg4" val="0"/>
-      <Int sr="arg5" val="3"/>
-      <Str sr="arg6" ve="3"/>
-      <Str sr="arg7" ve="3"/>
-      <Str sr="arg8" ve="3"/>
-      <Str sr="arg9" ve="3"/>
-    </Action>
-  </Task>
-  <Project sr="proj0" ve="2">
-    <cdate>1672531200000</cdate>
-    <mdate>1672531200000</mdate>
-    <name>NeteaseBridge</name>
-    <pids>1</pids>
-    <tids>101</tids>
-  </Project>
+<TaskerData sr="" dvi="1" tv="6.1.28">
+<Profile sr="prof2" ve="2">
+	<cdate>1672531200000</cdate>
+	<edate>1672531200000</edate>
+	<flags>8</flags>
+	<id>2</id>
+	<mid0>3</mid0>
+	<nme>云音乐推送</nme>
+	<Event sr="con0" ve="2">
+		<code>461</code>
+		<App sr="arg0">
+			<appPkg>com.netease.cloudmusic</appPkg>
+			<label>网易云音乐</label>
+		</App>
+		<Str sr="arg1" ve="3"/>
+		<Int sr="arg2" val="0"/>
+		<Str sr="arg3" ve="3"/>
+	</Event>
+</Profile>
+<Task sr="task3">
+	<cdate>1672531200000</cdate>
+	<edate>1672531200000</edate>
+	<id>3</id>
+	<nme>上报播放</nme>
+	<Action sr="act0" ve="7">
+		<code>1181</code>
+		<Bundle sr="arg0">
+			<Vals sr="val">
+				<net.dinglisch.android.tasker.RELEVANT_VARIABLES>&lt;StringArray sr=""&gt;&lt;_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;%http_data
+Response Body
+&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES0&gt;&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;%http_headers
+Response Headers
+&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES1&gt;&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES2&gt;%http_response_code
+Response Code
+&lt;/_array_net.dinglisch.android.tasker.RELEVANT_VARIABLES2&gt;&lt;/StringArray&gt;</net.dinglisch.android.tasker.RELEVANT_VARIABLES>
+				<net.dinglisch.android.tasker.extras.BODY>{"title":"%evtprm1","artist":"%evtprm2","album":"","coverUrl":"","isPlaying":true}</net.dinglisch.android.tasker.extras.BODY>
+				<net.dinglisch.android.tasker.extras.HEADERS>Authorization: Bearer ${token}</net.dinglisch.android.tasker.extras.HEADERS>
+				<net.dinglisch.android.tasker.extras.METHOD>POST</net.dinglisch.android.tasker.extras.METHOD>
+				<net.dinglisch.android.tasker.extras.TIMEOUT>10</net.dinglisch.android.tasker.extras.TIMEOUT>
+				<net.dinglisch.android.tasker.extras.URL>${baseUrl}/device/push</net.dinglisch.android.tasker.extras.URL>
+				<net.dinglisch.android.tasker.extras.VARIABLE_BODY>%http_data</net.dinglisch.android.tasker.extras.VARIABLE_BODY>
+				<net.dinglisch.android.tasker.extras.VARIABLE_HEADERS>%http_headers</net.dinglisch.android.tasker.extras.VARIABLE_HEADERS>
+			</Vals>
+		</Bundle>
+		<Int sr="arg1" val="0"/>
+		<Int sr="arg2" val="0"/>
+		<Int sr="arg3" val="0"/>
+	</Action>
+</Task>
+<Project sr="proj0" ve="2">
+	<cdate>1672531200000</cdate>
+	<mdate>1672531200000</mdate>
+	<name>NeteaseBridge</name>
+	<pids>2</pids>
+	<tids>3</tids>
+</Project>
 </TaskerData>`;
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="netease.prj.xml"');

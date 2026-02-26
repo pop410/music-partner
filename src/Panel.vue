@@ -196,6 +196,9 @@
                     <span class="nm-slider"></span>
                   </label>
                   <span class="text-xs whitespace-nowrap" :class="mobileListenerClass">{{ mobileListenerText }}</span>
+                  <button @click="checkMobileListener" class="nm-accent-btn text-white py-0.5 px-1.5 rounded text-xs">
+                    <i class="fa-solid fa-sync-alt"></i>
+                  </button>
                 </div>
                 <div class="text-xs text-gray-500">
                   <span v-if="pcRealtimeEnabled && helperRunning" class="text-green-600">已开启 (助手运行中)</span>
