@@ -1298,7 +1298,7 @@ const musicPromptTextGenerator = () => {
     ];
     const fullLyrics = lines.map(l => l.text || '').filter(Boolean).join('\n');
     const pieces = [
-        `现在的场景是{{user}}和{{char}}正在听歌,歌曲的名字是${title},{{char}}是否知道歌名取决于{{char}}是否明确被告知或者{{char}}曾经听过这首歌`,
+        `现在的场景是{{user}}和{{char}}正在听歌(或者是环境中的背景音),歌曲的名字是${title},{{char}}是否知道歌名取决于{{char}}是否明确被告知或者{{char}}曾经听过这首歌`,
         `歌曲的作者是${artist},{{char}}是否知道这个信息也同上文一样`,
         `{{char}}和{{user}}目前明确当前正在听的几句(也就是{{char}}被明确告知的歌词内容)是:`,
         five.map((t, i) => `第${i + 1}句：${t}`).join('\n'),

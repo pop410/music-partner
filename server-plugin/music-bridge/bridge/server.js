@@ -271,61 +271,69 @@ async function getTermuxPlayback() {
   const isTermux = 'TERMUX_VERSION' in process.env;
   if (!isTermux || !mobileRealtimeEnabled) return null;
 
-  return new Promise(resolve => {
-    console.log('[music-bridge] Checking Termux notifications...');
-    const proc = cp.spawn('termux-notification-list', [], { shell: false });
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', (data) => (stdout += data));
-    proc.stderr.on('data', (data) => (stderr += data));
-
-    proc.on('close', (code) => {
-      console.log(`[music-bridge] termux-notification-list exited with code ${code}`);
-      if (stderr) {
-        console.error('[music-bridge] termux-notification-list stderr:', stderr);
-      }
-      if (code !== 0) {
-        return resolve(null);
-      }
-      console.log('[music-bridge] termux-notification-list stdout:', stdout);
-      try {
-        const notifications = JSON.parse(stdout);
-        // Find notification from either Netease Music or Huawei Media Controller
-        const musicNotification = notifications.find(n => 
-          n.packageName === 'com.netease.cloudmusic' || 
-          n.packageName === 'com.huawei.mediacontroller'
-        );
-        if (musicNotification) {
-          console.log('[music-bridge] Found music notification:', musicNotification);
-          resolve({
-            source: 'termux',
-            isPlaying: true, // Assume playing if notification is present
-            title: musicNotification.title,
-            artist: musicNotification.content,
-            album: '',
-          });
-        } else {
-          console.log('[music-bridge] No music notification found. Available packages:', [...new Set(notifications.map(n => n.packageName))]);
-          resolve(null);
-        }
-      } catch (e) {
-        console.error('[music-bridge] Failed to parse termux-notification-list JSON:', e.message);
-        resolve(null);
-      }
+  try {
+    const notificationJson = await new Promise((resolve, reject) => {
+      const proc = cp.spawn('termux-notification-list', [], { shell: false });
+      let stdout = '';
+      proc.stdout.on('data', (data) => (stdout += data));
+      proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
+      proc.on('error', reject);
     });
 
-    proc.on('error', (err) => {
-      console.error('[music-bridge] Failed to spawn termux-notification-list:', err);
-      resolve(null);
+    const notifications = JSON.parse(notificationJson);
+    const musicNotification = notifications.find(n => 
+      n.packageName === 'com.netease.cloudmusic' || 
+      n.packageName === 'com.huawei.mediacontroller'
+    );
+
+    if (!musicNotification) return null;
+
+    const mediaSessionOutput = await new Promise((resolve, reject) => {
+      const proc = cp.spawn('dumpsys', ['media_session'], { shell: false });
+      let stdout = '';
+      proc.stdout.on('data', (data) => (stdout += data));
+      proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
+      proc.on('error', reject);
     });
-  });
+
+    const isPlaying = /state=PlaybackState .* state=3,/.test(mediaSessionOutput);
+
+    return {
+      source: 'termux',
+      isPlaying,
+      title: musicNotification.title,
+      artist: musicNotification.content,
+      album: ''
+    };
+  } catch (e) {
+    console.warn('[bridge] getTermuxPlayback failed:', e.message);
+    return null;
+  }
 }
 
-const getCurrentPlayback = async () => {
+const getCurrentPlayback = async (cookie) => {
   // Try Termux-API first if in Termux environment
   const termuxPlayback = await getTermuxPlayback();
-  if (termuxPlayback) {
-    return termuxPlayback;
+  if (termuxPlayback && termuxPlayback.title && termuxPlayback.artist) {
+    try {
+      const searchRes = await cloudsearch({
+        keywords: `${termuxPlayback.title} ${termuxPlayback.artist}`,
+        limit: 1,
+        cookie: cookie || ''
+      });
+      if (searchRes.body.result && searchRes.body.result.songs && searchRes.body.result.songs.length > 0) {
+        const song = searchRes.body.result.songs[0];
+        return {
+          ...termuxPlayback,
+          neteaseId: song.id,
+          duration: song.dt,
+          coverUrl: song.al.picUrl,
+        };
+      }
+    } catch (e) {
+      console.warn('[bridge] search failed for termux playback:', e.message);
+    }
+    return termuxPlayback; // Return basic info if search fails
   }
 
   if (useRealApiFlag) {
@@ -429,40 +437,7 @@ app.post('/current', async (req, res) => {
     if (mobilePlayback && (now - mobileLastUpdate) < 5 * 60 * 1000) {
       return res.json({ ...mobilePlayback, lastUpdate: mobileLastUpdate });
     }
-    const playback = await getCurrentPlayback();
-    // If we have title and artist, try to search for the song on Netease
-    if (playback.title && playback.artist) {
-      try {
-        // Add a 2s timeout for search to prevent UI freezing
-        const searchPromise = cloudsearch({
-          keywords: `${playback.title} ${playback.artist}`,
-          limit: 1,
-          cookie: req.body.cookie || ''
-        });
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Search timeout')), 2000)
-        );
-
-        const searchRes = await Promise.race([searchPromise, timeoutPromise]);
-
-        if (searchRes.result && searchRes.result.songs && searchRes.result.songs.length > 0) {
-          const song = searchRes.result.songs[0];
-          playback.neteaseId = song.id;
-          playback.duration = song.dt;
-          playback.coverUrl = song.al.picUrl;
-        }
-      } catch (searchErr) {
-        // Only warn if it's not a timeout (to reduce noise)
-        if (searchErr.message !== 'Search timeout') {
-           const status = searchErr.status || 'Unknown';
-           const msg = searchErr.body?.msg || searchErr.message;
-           console.warn(`[bridge] search failed for playback (${status}): ${msg}`);
-        } else {
-           // console.log('[bridge] search timed out, returning basic info');
-        }
-        // Continue without extra info
-      }
-    }
+    const playback = await getCurrentPlayback(req.body.cookie);
     res.json(playback);
   } catch (error) {
     console.error(error);
