@@ -290,9 +290,13 @@ async function getTermuxPlayback() {
       console.log('[music-bridge] termux-notification-list stdout:', stdout);
       try {
         const notifications = JSON.parse(stdout);
-        const musicNotification = notifications.find(n => n.packageName === 'com.netease.cloudmusic');
+        // Find notification from either Netease Music or Huawei Media Controller
+        const musicNotification = notifications.find(n => 
+          n.packageName === 'com.netease.cloudmusic' || 
+          n.packageName === 'com.huawei.mediacontroller'
+        );
         if (musicNotification) {
-          console.log('[music-bridge] Found Netease Cloud Music notification:', musicNotification);
+          console.log('[music-bridge] Found music notification:', musicNotification);
           resolve({
             source: 'termux',
             isPlaying: true, // Assume playing if notification is present
@@ -301,7 +305,7 @@ async function getTermuxPlayback() {
             album: '',
           });
         } else {
-          console.log('[music-bridge] Netease Cloud Music notification not found. Available packages:', [...new Set(notifications.map(n => n.packageName))]);
+          console.log('[music-bridge] No music notification found. Available packages:', [...new Set(notifications.map(n => n.packageName))]);
           resolve(null);
         }
       } catch (e) {
