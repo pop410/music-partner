@@ -288,15 +288,21 @@ async function getTermuxPlayback() {
 
     if (!musicNotification) return null;
 
-    const mediaSessionOutput = await new Promise((resolve, reject) => {
-      const proc = cp.spawn('dumpsys', ['media_session'], { shell: false });
-      let stdout = '';
-      proc.stdout.on('data', (data) => (stdout += data));
-      proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
-      proc.on('error', reject);
-    });
-
-    const isPlaying = /state=PlaybackState .* state=3,/.test(mediaSessionOutput);
+    let isPlaying = true; // Default to true as a fallback
+    try {
+      const mediaSessionOutput = await new Promise((resolve, reject) => {
+        // Use absolute path for dumpsys
+        const proc = cp.spawn('/system/bin/dumpsys', ['media_session'], { shell: false });
+        let stdout = '';
+        proc.stdout.on('data', (data) => (stdout += data));
+        proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
+        proc.on('error', reject);
+      });
+      isPlaying = /state=PlaybackState .* state=3,/.test(mediaSessionOutput);
+    } catch (dumpsysError) {
+      console.warn(`[bridge] dumpsys failed ('${dumpsysError.message}'), falling back to isPlaying=true.`);
+      // Fallback is already handled by the default value of isPlaying
+    }
 
     return {
       source: 'termux',
