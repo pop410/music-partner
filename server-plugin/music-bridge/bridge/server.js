@@ -7,23 +7,10 @@ const path = require('path');
 const crypto = require('crypto');
 const cp = require('child_process');
 const http = require('http');
-const os = require('os');
 const { cloudsearch, lyric, song_url, login_status, login_cellphone, user_playlist, playlist_detail } = NCM;
 const login_qr_key = NCM.login_qr_key;
 const login_qr_create = NCM.login_qr_create;
 const login_qr_check = NCM.login_qr_check;
-
-function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return '127.0.0.1';
-}
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -435,8 +422,7 @@ app.get('/mobile/setup', (req, res) => {
 });
 
 app.get('/mobile/tasker.xml', (req, res) => {
-  const localIp = getLocalIp();
-  const baseUrl = `http://${localIp}:${port}`;
+  const baseUrl = `http://127.0.0.1:${port}`;
   const token = apiToken || '';
   // Tasker Project using modern "HTTP Request" action
   const xml = `<?xml version="1.0" encoding="utf-8"?>
