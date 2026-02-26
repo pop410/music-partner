@@ -59,6 +59,10 @@ function exists(p) {
   try { return fs.existsSync(p); } catch { return false; }
 }
 
+function fileSize(p) {
+  try { return fs.statSync(p).size || 0; } catch { return 0; }
+}
+
 function envForBridge() {
   const env = { ...process.env };
   env.PORT = env.PORT || '3000';
@@ -66,6 +70,46 @@ function envForBridge() {
   env.ALLOW_ORIGIN = env.ALLOW_ORIGIN || '*';
   // Optional: API_TOKEN / USE_REAL_MEDIA_API can be passed through
   return env;
+}
+
+function needDepsInstall() {
+  const nm = path.join(bridgeDir, 'node_modules');
+  const pkg = path.join(bridgeDir, 'package.json');
+  if (!exists(pkg)) return false;
+  if (!exists(nm)) return true;
+  // quick heuristics
+  const must = ['express', 'body-parser', 'cors', 'NeteaseCloudMusicApi'];
+  return must.some(name => !exists(path.join(nm, name)));
+}
+
+async function runInstall() {
+  return new Promise(resolve => {
+    const manager = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const argsList = [
+      ['ci', '--omit=dev', '--no-audit', '--no-fund'],
+      ['install', '--production', '--no-audit', '--no-fund'],
+    ];
+    let step = 0;
+    const tryInstall = () => {
+      if (step >= argsList.length) return resolve(false);
+      const args = argsList[step++];
+      console.info(`[music-bridge] installing deps: ${manager} ${args.join(' ')}`);
+      const p = spawn(manager, args, { cwd: bridgeDir, env: envForBridge(), shell: false, windowsHide: true });
+      p.stdout.setEncoding('utf8'); p.stderr.setEncoding('utf8');
+      p.stdout.on('data', d => log('install', d));
+      p.stderr.on('data', d => log('install', d));
+      p.on('close', code => {
+        if (code === 0 && !needDepsInstall()) return resolve(true);
+        console.warn(`[music-bridge] install step failed (code=${code}), trying fallback if available`);
+        tryInstall();
+      });
+      p.on('error', () => {
+        console.warn('[music-bridge] install spawn error, trying fallback');
+        tryInstall();
+      });
+    };
+    tryInstall();
+  });
 }
 
 function spawnBridge() {
@@ -81,6 +125,15 @@ function spawnBridge() {
   if (child) {
     console.info('[music-bridge] bridge already running');
     return;
+  }
+
+  // Auto install missing deps on first start
+  if (needDepsInstall()) {
+    const ok = await runInstall();
+    if (!ok) {
+      console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
+      return;
+    }
   }
 
   const nodeExec = process.execPath || 'node';
