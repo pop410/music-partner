@@ -112,6 +112,41 @@ async function runInstall() {
   });
 }
 
+async function ensureTermuxApi() {
+  const isTermux = 'TERMUX_VERSION' in process.env;
+  if (!isTermux) return;
+
+  return new Promise(resolve => {
+    const check = spawn('which', ['termux-notification-list'], { shell: false });
+    check.on('close', code => {
+      if (code === 0) {
+        console.info('[music-bridge] termux-api is already installed.');
+        return resolve(true);
+      }
+
+      console.info('[music-bridge] termux-api not found, attempting to install...');
+      const install = spawn('pkg', ['install', 'termux-api', '-y'], { stdio: 'inherit' });
+      install.on('close', installCode => {
+        if (installCode === 0) {
+          console.info('[music-bridge] termux-api installed successfully.');
+          resolve(true);
+        } else {
+          console.error('[music-bridge] Failed to install termux-api. Please install it manually.');
+          resolve(false);
+        }
+      });
+      install.on('error', () => {
+        console.error('[music-bridge] Failed to spawn pkg command. Is this a Termux environment?');
+        resolve(false);
+      });
+    });
+    check.on('error', () => {
+      console.error('[music-bridge] Failed to spawn which command.');
+      resolve(false);
+    });
+  });
+}
+
 function spawnBridge() {
   if (!exists(serverFile)) {
     console.error(`[music-bridge] server.js not found. tried dir: ${bridgeDir}`);
@@ -127,8 +162,7 @@ function spawnBridge() {
     return;
   }
 
-  // Auto install missing deps on first start
-  const start = async () => {
+  const startServer = () => {
     const nodeExec = process.execPath || 'node';
     console.info(`[music-bridge] starting bridge: ${nodeExec} ${serverFile}`);
     console.info(`[music-bridge] cwd: ${bridgeDir}`);
@@ -152,21 +186,28 @@ function spawnBridge() {
       }
     });
   };
-  if (needDepsInstall()) {
-    runInstall()
-      .then(ok => {
-        if (!ok) {
+
+  const run = async () => {
+    await ensureTermuxApi();
+
+    if (needDepsInstall()) {
+      runInstall()
+        .then(ok => {
+          if (!ok) {
+            console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
+            return;
+          }
+          startServer();
+        })
+        .catch(() => {
           console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
-          return;
-        }
-        start();
-      })
-      .catch(() => {
-        console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
-      });
-    return;
-  }
-  start();
+        });
+      return;
+    }
+    startServer();
+  };
+
+  run();
 }
 
 function stopBridge() {

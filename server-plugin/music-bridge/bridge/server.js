@@ -265,7 +265,46 @@ function callHelperCurrent() {
     req.end();
   });
 }
+
+async function getTermuxPlayback() {
+  const isTermux = 'TERMUX_VERSION' in process.env;
+  if (!isTermux) return null;
+
+  return new Promise(resolve => {
+    const proc = cp.spawn('termux-notification-list', [], { shell: false });
+    let stdout = '';
+    proc.stdout.on('data', (data) => (stdout += data));
+    proc.on('close', (code) => {
+      if (code !== 0) return resolve(null);
+      try {
+        const notifications = JSON.parse(stdout);
+        const musicNotification = notifications.find(n => n.packageName === 'com.netease.cloudmusic');
+        if (musicNotification) {
+          resolve({
+            source: 'termux',
+            isPlaying: true, // Assume playing if notification is present
+            title: musicNotification.title,
+            artist: musicNotification.content,
+            album: '',
+          });
+        } else {
+          resolve(null);
+        }
+      } catch {
+        resolve(null);
+      }
+    });
+    proc.on('error', () => resolve(null));
+  });
+}
+
 const getCurrentPlayback = async () => {
+  // Try Termux-API first if in Termux environment
+  const termuxPlayback = await getTermuxPlayback();
+  if (termuxPlayback) {
+    return termuxPlayback;
+  }
+
   if (useRealApiFlag) {
     // 1. 优先尝试 helper exe
     try {
