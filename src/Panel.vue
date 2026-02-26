@@ -292,7 +292,7 @@ function updateStatus(status: string) {
 }
 
 // 更新播放状态函数 - 将被外部插件调用  
-function updatePlaybackStatus(playback: { title?: string; artist?: string; isPlaying?: boolean } | null) {
+function updatePlaybackStatus(playback: any | null) {
   if (!playback) {
     currentSong.value = null
     return
@@ -301,7 +301,13 @@ function updatePlaybackStatus(playback: { title?: string; artist?: string; isPla
   currentSong.value = {
     title: playback.title || '',
     artist: playback.artist || '',
-    isPlaying: playback.isPlaying || false
+    isPlaying: playback.isPlaying || false,
+    coverUrl: playback.coverUrl || ''
+  }
+
+  if (playback.source === 'termux') {
+    mobileListenerText.value = '手机推送：正常'
+    mobileListenerClass.value = 'text-green-600'
   }
 }
 
@@ -666,7 +672,6 @@ async function refreshPlaybackNow() {
     const j = await r.json().catch(()=>null)
     if (j && !j.error) {
       updatePlaybackStatus(j)
-      checkMobileListener()
     }
   } catch {}
 }
@@ -778,34 +783,11 @@ async function checkMobileListener() {
         }
         return
       }
-      mobileListenerText.value = '手机推送：未收到'
-      mobileListenerClass.value = 'text-gray-400'
-      return
     }
   } catch {}
-  try {
-    const cookie = window.NeteaseMusicPlugin?.getCookie?.() || ''
-    const r2 = await fetch(`${base}/current`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cookie })
-    })
-    const j2 = await r2.json().catch(() => null)
-    if (j2?.source === 'mobile' && typeof j2.lastUpdate === 'number') {
-      const age = Math.max(0, Date.now() - j2.lastUpdate)
-      mobileListenerText.value = age < 2 * 60 * 1000 ? `手机推送：正常（${formatAge(age)}前）` : `手机推送：可能断开（${formatAge(age)}前）`
-      mobileListenerClass.value = age < 2 * 60 * 1000 ? 'text-green-600' : 'text-yellow-600'
-      return
-    }
-    if (j2?.source === 'termux' && j2.isPlaying) {
-      mobileListenerText.value = '手机推送：正常'
-      mobileListenerClass.value = 'text-green-600'
-      return
-    }
+  // If the new Termux method is active, we don't show "Not Received"
+  if (mobileListenerClass.value !== 'text-green-600') {
     mobileListenerText.value = '手机推送：未收到'
-    mobileListenerClass.value = 'text-gray-400'
-  } catch {
-    mobileListenerText.value = '手机推送：未知'
     mobileListenerClass.value = 'text-gray-400'
   }
 }
