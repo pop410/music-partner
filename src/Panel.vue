@@ -190,6 +190,22 @@
             <div class="flex items-center justify-between gap-2">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-2">
+                  <span class="text-xs whitespace-nowrap w-32">电脑端监听助手</span>
+                  <label class="nm-switch">
+                    <input type="checkbox" v-model="pcRealtimeEnabled" @change="enablePcRealtime(pcRealtimeEnabled)" />
+                    <span class="nm-slider"></span>
+                  </label>
+                </div>
+                <div class="text-xs text-gray-500">
+                  <span v-if="pcRealtimeEnabled && helperRunning" class="text-green-600">已开启 (助手运行中)</span>
+                  <span v-else-if="pcRealtimeEnabled && !helperRunning" class="text-red-500">开启中...</span>
+                  <span v-else>已关闭</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
                   <span class="text-xs whitespace-nowrap w-32">手机端监听 (Termux)</span>
                   <label class="nm-switch">
                     <input type="checkbox" v-model="mobileRealtimeEnabled" @change="enableMobileRealtime(mobileRealtimeEnabled)" />
