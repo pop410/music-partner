@@ -9,6 +9,7 @@ declare const toastr: any;
 interface SillyTavernContext {
   extensionSettings: { [key: string]: any; neteaseMusicCookie?: string; };
   saveSettings: () => void;
+  saveSettingsDebounced?: () => void;
   showSuccessMessage: (message: string) => void;
   showErrorMessage: (message: string) => void;
   showWarningMessage: (message: string) => void;
@@ -59,6 +60,9 @@ declare global {
       startService: () => void;
       stopService: (autoPaused?: boolean) => void;
       setCookie: (cookie: string) => void;
+      setCookieFromInput: (input: string) => boolean;
+      setBaseUrl: (url: string) => void;
+      autoDetectBaseUrl: (candidates?: string[]) => Promise<string | null>;
       getServiceStatus: () => boolean;
       getCookie: () => string;
       getSettings: () => any;
@@ -1623,101 +1627,143 @@ const SyncStatusBar = {
 // 6. 悬浮球与音乐窗口组件
 // ------------------------------------------------------------------------------------------------
 
-// 悬浮球组件
 const FloatingBall = {
   element: null as HTMLElement | null,
   isVisible: false,
-  
+  isDragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  lastX: 60,
+  lastY: 150,
+
   create() {
-    // 如果已存在则移除
-    const existing = document.getElementById('netease-music-floating-ball');
-    if (existing) existing.remove();
+    if (this.element && document.body.contains(this.element)) {
+      this.element.style.display = 'flex';
+      this.isVisible = true;
+      return;
+    }
+
+    if (this.element) {
+        this.element.remove();
+    }
+
+    this.element = document.createElement('div');
+    this.element.id = 'netease-music-floating-ball';
     
-    // 创建悬浮球元素
-    const ball = document.createElement('div');
-    ball.id = 'netease-music-floating-ball';
-    
-    // 添加音乐图标
-    const icon = document.createElement('i');
-    icon.className = 'fa-solid fa-music';
-    ball.appendChild(icon);
-    
-    // 点击显示音乐窗口（跟随悬浮球位置）
-    ball.addEventListener('click', () => {
-      if (didDrag) {
-        didDrag = false;
+    // 强制应用关键样式以确保可见性和交互性
+    this.element.style.position = 'fixed';
+    this.element.style.left = `${this.lastX}px`;
+    this.element.style.top = `${this.lastY}px`;
+    this.element.style.width = '50px';
+    this.element.style.height = '50px';
+    this.element.style.borderRadius = '50%';
+    this.element.style.backgroundColor = 'rgba(34, 139, 34, 0.8)';
+    this.element.style.cursor = 'pointer';
+    this.element.style.display = 'flex';
+    this.element.style.alignItems = 'center';
+    this.element.style.justifyContent = 'center';
+    this.element.style.zIndex = '99999'; // 设置一个非常高的 z-index
+    this.element.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+    this.element.style.transition = 'transform 0.2s ease-out, background-color 0.3s';
+
+
+    this.element.innerHTML = `<i class="fa-solid fa-music" style="color: white; font-size: 24px;"></i>`;
+    document.body.appendChild(this.element);
+    this.isVisible = true;
+
+    let moved = false;
+    let pressTimer: number | null = null;
+
+    const startDrag = (clientX: number, clientY: number) => {
+        this.isDragging = true;
+        moved = false;
+        this.dragStartX = clientX - this.element!.getBoundingClientRect().left;
+        this.dragStartY = clientY - this.element!.getBoundingClientRect().top;
+        this.element!.style.transition = 'none';
+        this.element!.style.transform = 'scale(1.1)';
+        this.element!.style.backgroundColor = 'rgba(255, 69, 0, 0.8)';
+    };
+
+    // 鼠标事件
+    this.element.addEventListener('mousedown', (e) => {
+      startDrag(e.clientX, e.clientY);
+    });
+
+    // 触摸事件
+    this.element.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    const onMove = (clientX: number, clientY: number) => {
+      if (!this.isDragging) return;
+      
+      let newX = clientX - this.dragStartX;
+      let newY = clientY - this.dragStartY;
+
+      const ballRect = this.element!.getBoundingClientRect();
+      newX = Math.max(0, Math.min(newX, window.innerWidth - ballRect.width));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - ballRect.height));
+
+      if (Math.abs(newX - (this.lastX + this.dragStartX)) > 5 || Math.abs(newY - (this.lastY + this.dragStartY)) > 5) {
+        moved = true;
+      }
+
+      this.element!.style.left = `${newX}px`;
+      this.element!.style.top = `${newY}px`;
+    };
+
+    window.addEventListener('mousemove', (e) => {
+      onMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        onMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    });
+
+    const onEnd = () => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      this.element!.style.transition = 'transform 0.2s ease-out, background-color 0.3s';
+      this.element!.style.transform = 'scale(1)';
+      this.element!.style.backgroundColor = 'rgba(34, 139, 34, 0.8)';
+      const rect = this.element!.getBoundingClientRect();
+      this.lastX = rect.left;
+      this.lastY = rect.top;
+    };
+
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchend', onEnd);
+
+    this.element.addEventListener('click', (e) => {
+      if (moved) {
+        e.preventDefault();
+        e.stopPropagation();
         return;
       }
-      if (MusicWindow.isVisible) {
-        MusicWindow.hide();
-      } else {
-        MusicWindow.showAtElement(ball);
-      }
+      MusicWindow.toggle();
     });
-    
-    // 拖拽功能
-    let isDragging = false;
-    let didDrag = false;
-    const dragThreshold = 3;
-    let startX = 0, startY = 0, startLeft = 0, startTop = 0;
-    
-    ball.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      didDrag = false;
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = ball.getBoundingClientRect();
-      startLeft = rect.left;
-      startTop = rect.top;
-      
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    });
-    
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!didDrag && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
-        didDrag = true;
-        MusicWindow.hide();
-      }
-      if (!didDrag) return;
-      ball.style.left = `${startLeft + dx}px`;
-      ball.style.top = `${startTop + dy}px`;
-      ball.style.right = 'auto';
-      ball.style.bottom = 'auto';
-    };
-    
-    const onMouseUp = () => {
-      isDragging = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    
-    document.body.appendChild(ball);
-    this.element = ball;
-    this.isVisible = true;
-    
-    // 显示创建提示
-    toastr.info('悬浮球已创建，点击打开音乐窗口');
   },
-  
+
   hide() {
     if (this.element) {
       this.element.style.display = 'none';
-      this.isVisible = false;
-      MusicWindow.hide();
     }
+    this.isVisible = false;
   },
   
-  show() {
-    if (this.element) {
-      this.element.style.display = 'flex';
-      this.isVisible = true;
+  toggle() {
+    if (this.element && this.element.style.display !== 'none') {
+      this.hide();
+    } else {
+      this.create();
     }
- }
- };
+  }
+};
 
 // 音乐悬浮窗组件（纯展示型，无播放控制）
 const MusicWindow = {
