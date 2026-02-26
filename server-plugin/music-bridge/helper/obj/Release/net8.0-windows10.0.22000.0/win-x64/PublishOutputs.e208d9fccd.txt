@@ -1,0 +1,2 @@
+F:\test\SillyTavern-Launcher-main\SillyTavern\data\default-user\extensions\st-netease-music\helper\dist\netease-helper.pdb
+F:\test\SillyTavern-Launcher-main\SillyTavern\data\default-user\extensions\st-netease-music\helper\dist\netease-helper.exe

@@ -545,18 +545,21 @@ const MusicApi = {
   // 设置 Cookie
   setCookie(cookie: string) {
     this.cookie = cookie;
-    if (window.SillyTavern && window.SillyTavern.getContext) {
-      const context = window.SillyTavern.getContext();
-      if (context && context.extensionSettings) {
-        // Ensure the neteaseMusicCompanion object exists
-        if (!context.extensionSettings.neteaseMusicCompanion) {
-          context.extensionSettings.neteaseMusicCompanion = {};
+    try {
+      const ctx = getContext();
+      if (ctx && ctx.extensionSettings) {
+        if (!ctx.extensionSettings[MODULE_NAME]) {
+          ctx.extensionSettings[MODULE_NAME] = {};
         }
-        context.extensionSettings.neteaseMusicCompanion.neteaseMusicCookie = cookie;
-        context.saveSettings();
+        ctx.extensionSettings[MODULE_NAME].neteaseMusicCookie = cookie;
+        saveSettings();
       }
+    } catch (e) {
+      console.warn('[Music] Failed to persist cookie to settings', e);
     }
-    toastr.success('网易云 Cookie 已设置');
+    if (cookie && cookie.trim()) {
+      toastr.success('网易云 Cookie 已设置');
+    }
   },
 
   // 刷新同步状态，例如在 Cookie 更新后
@@ -837,8 +840,11 @@ function startMusicService() {
   MusicApi.isServiceActive = true;
   MusicApi.autoPaused = false; // Reset autoPaused when service is explicitly started
   PlayerState.init(); // This will start polling
-  getContext().registerPromptInjector('neteaseMusic', musicPromptGenerator);
-  getContext().registerPromptInjector('neteaseMusicText', musicPromptTextGenerator);
+  const ctx = getContext();
+  if ((ctx as any).registerPromptInjector) {
+    (ctx as any).registerPromptInjector('neteaseMusic', musicPromptGenerator);
+    (ctx as any).registerPromptInjector('neteaseMusicText', musicPromptTextGenerator);
+  }
   getContext().showSuccessMessage('网易云音乐服务已启动。');
   console.log('[Music] Service started.');
 }
@@ -1058,7 +1064,7 @@ const PlayerState = {
   isPlaying: false,
   currentTime: 0, // 毫秒
   audioElement: null as HTMLAudioElement | null,
-  pollingInterval: null as ReturnType<typeof setInterval> | null,
+  pollingInterval: null as any, // ReturnType<typeof setTimeout> | null
 
   init() {
     MusicCache.load();
@@ -1128,45 +1134,76 @@ const PlayerState = {
   // 轮询当前播放状态
   startPolling(intervalMs: number = 3000) {
     if (this.pollingInterval) clearInterval(this.pollingInterval);
-    this.pollingInterval = setInterval(async () => {
-      const playback = await MusicApi.getCurrentPlayback();
-      if (!playback) {
-        // 更新扩展栏：未连接
-        dispatchStatusUpdate(null);
-        return;
-      }
+    
+    // 缓存上一次的播放状态，用于比对
+    let lastStateStr = '';
+
+    // 使用递归 setTimeout 替代 setInterval 以防止请求堆积
+    const poll = async () => {
+      // 记录开始时间
+      const startTime = Date.now();
       
-      // 更新扩展栏
-      dispatchStatusUpdate(playback);
-      
-      // 如果有网易云 ID，尝试切换歌曲
-      if (playback.neteaseId && playback.neteaseId !== this.currentSong?.id) {
-        // 创建歌曲信息对象
-        const song: SongInfo = {
-          id: playback.neteaseId,
-          name: playback.title || '未知歌曲',
-          artist: playback.artist || '未知艺术家',
-          coverUrl: playback.coverUrl || '',
-          duration: playback.duration || 0
-        };
-        // 播放歌曲（如果正在播放）
-        if (playback.isPlaying) {
-          await this.play(song);
+      try {
+        const playback = await MusicApi.getCurrentPlayback();
+        
+        if (!playback) {
+          // 只有状态真正改变时才触发更新
+          if (lastStateStr !== 'null') {
+            dispatchStatusUpdate(null);
+            lastStateStr = 'null';
+          }
         } else {
-          // 更新当前歌曲信息但不播放
-          this.currentSong = song;
+          this.isPlaying = !!playback.isPlaying;
+          // 构建当前状态的唯一标识（ID + 播放状态）
+          const currentStateStr = `${playback.neteaseId || playback.title}-${playback.isPlaying}`;
+          
+          // 只有当歌曲 ID 或 播放/暂停状态 发生变化时才派发更新事件
+          if (currentStateStr !== lastStateStr) {
+            dispatchStatusUpdate(playback);
+            lastStateStr = currentStateStr;
+            
+            // 如果有网易云 ID，尝试切换歌曲缓存
+            if (!this.currentSong || (playback.neteaseId && playback.neteaseId !== this.currentSong.id)) {
+              this.currentSong = {
+                id: playback.neteaseId ?? this.currentSong?.id ?? -1,
+                name: playback.title || '未知歌曲',
+                artist: playback.artist || '未知艺术家',
+                coverUrl: playback.coverUrl || '',
+                duration: playback.duration || 0,
+              };
+            } else {
+              this.currentSong.name = playback.title || this.currentSong.name;
+              this.currentSong.artist = playback.artist || this.currentSong.artist;
+              this.currentSong.coverUrl = playback.coverUrl || this.currentSong.coverUrl;
+              this.currentSong.duration = playback.duration || this.currentSong.duration;
+            }
+          }
+          
+          // 内部状态同步
+          if (this.currentSong) {
+            this.isPlaying = !!playback.isPlaying;
+          }
         }
-      } else if (playback.isPlaying !== this.isPlaying) {
-        // 播放状态变化
-        if (playback.isPlaying) {
-          // 恢复播放
-          this.audioElement?.play();
-          this.isPlaying = true;
-        } else {
-          this.pause();
-        }
+      } catch (e) {
+        console.warn('[Music] Polling failed:', e);
+      } finally {
+        // 计算本次操作耗时
+        const elapsed = Date.now() - startTime;
+        // 确保视觉上的稳定间隔
+        const nextDelay = Math.max(0, intervalMs - elapsed);
+        this.pollingInterval = setTimeout(poll, nextDelay);
       }
-    }, intervalMs);
+    };
+
+    // 立即执行一次
+    poll();
+  },
+  
+  stopPolling() {
+      if (this.pollingInterval) {
+          clearTimeout(this.pollingInterval);
+          this.pollingInterval = null;
+      }
   }
 };
 
@@ -1175,10 +1212,27 @@ const PlayerState = {
 // ------------------------------------------------------------------------------------------------
 
 const musicPromptGenerator = () => {
-    if (!PlayerState.currentSong || !PlayerState.isPlaying) {
-        return ''; // 不播放时不注入
+    if (!PlayerState.currentSong) {
+        return '';
     }
-    
+
+    // 该注入由 SillyTavern 的 registerPromptInjector 挂载到“提示词”中（非聊天消息），不属于 user/assistant 消息内容。
+    if (!PlayerState.isPlaying) {
+        return JSON.stringify({
+            song: {
+                id: PlayerState.currentSong.id,
+                title: PlayerState.currentSong.name,
+                artist: PlayerState.currentSong.artist,
+            },
+            playback: {
+                current_position_ms: Math.floor(PlayerState.currentTime),
+                duration_ms: PlayerState.currentSong.duration,
+                is_playing: false,
+            },
+            status: '歌曲已暂停播放,当前情景中的音乐暂停了',
+        });
+    }
+
     const { recentPast, nearFuture } = LyricParser.getSlice(
         PlayerState.currentSong.lrcLines || [], 
         PlayerState.currentTime
@@ -1205,23 +1259,234 @@ const musicPromptGenerator = () => {
 };
 
 const musicPromptTextGenerator = () => {
-    if (!PlayerState.currentSong || !PlayerState.isPlaying) {
+    if (!PlayerState.currentSong) {
         return '';
     }
+    // 该注入由 SillyTavern 的 registerPromptInjector 挂载到“提示词”中（非聊天消息），不属于 user/assistant 消息内容。
+
+    if (!PlayerState.isPlaying) {
+        const title = PlayerState.currentSong.name || '';
+        const artist = PlayerState.currentSong.artist || '';
+        return `歌曲已暂停播放,当前情景中的音乐暂停了\n歌曲：${title}\n作者：${artist}`;
+    }
+
     const title = PlayerState.currentSong.name || '';
     const artist = PlayerState.currentSong.artist || '';
-    const { recentPast, nearFuture } = LyricParser.getSlice(
-        PlayerState.currentSong.lrcLines || [],
-        PlayerState.currentTime
-    );
-    const currentLine = recentPast.length ? recentPast[recentPast.length - 1].text : '';
-    const nextLine = nearFuture.length ? nearFuture[0].text : '';
+    const lines = PlayerState.currentSong.lrcLines || [];
+    const { recentPast, nearFuture } = LyricParser.getSlice(lines, PlayerState.currentTime);
+    const currentObj = recentPast.length ? recentPast[recentPast.length - 1] : null;
+    const currentIndex = currentObj ? lines.findIndex(l => l.text === currentObj.text) : -1;
+    const getText = (idx: number) => (idx >= 0 && idx < lines.length && lines[idx]?.text) ? lines[idx].text : '';
+    const five = [
+        getText(currentIndex - 2),
+        getText(currentIndex - 1),
+        getText(currentIndex),
+        getText(currentIndex + 1),
+        getText(currentIndex + 2),
+    ];
+    const fullLyrics = lines.map(l => l.text || '').filter(Boolean).join('\n');
     const pieces = [
-        `正在播放：${title} - ${artist}`,
-        currentLine ? `当前歌词：${currentLine}` : '',
-        nextLine ? `下一句：${nextLine}` : ''
-    ].filter(Boolean);
+        `现在的场景是{{user}}和{{char}}正在听歌,歌曲的名字是${title},{{char}}是否知道歌名取决于{{char}}是否明确被告知或者{{char}}曾经听过这首歌`,
+        `歌曲的作者是${artist},{{char}}是否知道这个信息也同上文一样`,
+        `{{char}}和{{user}}目前明确当前正在听的几句(也就是{{char}}被明确告知的歌词内容)是:`,
+        five.map((t, i) => `第${i + 1}句：${t}`).join('\n'),
+        `本歌曲的全部歌词如下:\n${fullLyrics}`,
+        '接下来根据歌名和歌曲作者(作者的风格也是对歌曲的一种描述)以及歌词进行联网查询,获取到曲子的风格,作为接下来创作{{char}}的回复的参考信息之一,如果不能进行联网查询信息,那么直接根据当前获得的歌词作为回复的参考信息',
+        `Now the scene is that {{user}} and {{char}} are listening to a song. The name of the song is ${title}. Whether {{char}} knows the song title depends on whether {{char}} has been explicitly told or has heard the song before.`,
+        `The artist of the song is ${artist}. Whether {{char}} knows this information is the same as above.`,
+        `The lines that {{char}} and {{user}} are currently sure are playing (i.e., the lyrics that {{char}} has been explicitly told) are:`,
+        five.map((t, i) => `Line ${i + 1}: ${t}`).join('\n'),
+        `The full lyrics of the song are as follows:\n${fullLyrics}`,
+        `Next, search online based on the song title, the artist (the artist's style is also a description of the song), and the lyrics to get the style of the song as one of the references for creating {{char}}'s reply. If online search is not available, directly use the lyrics obtained currently as the reference for the reply.`
+    ];
     return pieces.join('\n');
+};
+
+(globalThis as any).neteaseMusicGenerateInterceptor = async function (chat: any[], _contextSize: number, _abort: any, _type: string) {
+  try {
+    const settings = getSettings();
+    const baseUrl = settings?.neteaseMusicBaseUrl || MusicApi.baseUrl;
+    const cookie = settings?.neteaseMusicCookie || MusicApi.cookie || '';
+    if (!baseUrl || !cookie) {
+      return;
+    }
+
+    const playbackRes = await fetch(`${baseUrl}/current`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cookie }),
+    });
+    const playback = await playbackRes.json().catch(() => null);
+    if (!playbackRes.ok || !playback || playback.error) {
+      return;
+    }
+
+    const title = playback.title || playback.name || '未知歌曲';
+    const artist = playback.artist || '未知艺术家';
+    const isPlaying = !!playback.isPlaying;
+
+    if (!isPlaying) {
+      const injection = {
+        is_user: false,
+        name: 'NeteaseMusic',
+        send_date: Date.now(),
+        mes: '歌曲已暂停播放,当前情景中的音乐暂停了',
+        extra: { type: 'narrator' },
+      };
+      const lastUserIndex = (() => {
+        for (let i = chat.length - 1; i >= 0; i--) {
+          if (chat[i]?.is_user) return i;
+        }
+        return -1;
+      })();
+      if (lastUserIndex >= 0) chat.splice(lastUserIndex, 0, injection);
+      else chat.push(injection);
+      return;
+    }
+
+    let fullLyrics = '';
+    let five: string[] = [];
+    let songId = playback.neteaseId;
+    if (!songId && title && artist) {
+      try {
+        const searchRes = await fetch(`${baseUrl}/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookie, keywords: `${title} ${artist}`, limit: 1 }),
+        });
+        const searchJson = await searchRes.json().catch(() => null);
+        const songs =
+          searchJson?.result?.songs ||
+          searchJson?.body?.result?.songs ||
+          searchJson?.data?.result?.songs ||
+          searchJson?.body?.data?.result?.songs ||
+          [];
+        const first = Array.isArray(songs) ? songs[0] : null;
+        if (first?.id) songId = first.id;
+      } catch {
+        // ignore
+      }
+    }
+    if (!songId && title) {
+      try {
+        const searchRes = await fetch(`${baseUrl}/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookie, keywords: `${title}`, limit: 1 }),
+        });
+        const searchJson = await searchRes.json().catch(() => null);
+        const songs =
+          searchJson?.result?.songs ||
+          searchJson?.body?.result?.songs ||
+          searchJson?.data?.result?.songs ||
+          searchJson?.body?.data?.result?.songs ||
+          [];
+        const first = Array.isArray(songs) ? songs[0] : null;
+        if (first?.id) songId = first.id;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (songId) {
+      try {
+        const lyricRes = await fetch(`${baseUrl}/lyric`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookie, id: songId }),
+        });
+        const lyricJson = await lyricRes.json().catch(() => null);
+        const lyric =
+          lyricJson?.lrc?.lyric ||
+          lyricJson?.body?.lrc?.lyric ||
+          lyricJson?.data?.lrc?.lyric ||
+          lyricJson?.body?.data?.lrc?.lyric;
+        if (typeof lyric === 'string' && lyric.trim()) {
+          const lines = LyricParser.parse(lyric);
+          const creditPatterns = [
+            /^(作词|作曲|编曲|制作|制作人|监制|录音|混音|母带|出品|发行|制作公司|版权|演唱|演奏|和声|词|曲)\s*[:：]/,
+            /^(Lyrics?|Lyricist|Composer|Arranger|Producer|Recorded|Recording|Mixed|Mixing|Master(?:ing)?|Label|Publisher|Copyright)\b[:：]?/i,
+          ];
+          const sanitize = (t: string) => (t || '').replace(/\s+/g, ' ').trim();
+          const isCredit = (t: string) => {
+            const s = sanitize(t);
+            if (!s) return true;
+            if (creditPatterns.some(r => r.test(s))) return true;
+            if (/^\(?\s*(Romanized|Pinyin|Instrumental|伴奏)\s*\)?$/i.test(s)) return true;
+            return false;
+          };
+          const cleanTexts = lines.map(l => sanitize(l.text)).filter(t => t && !isCredit(t));
+          const positionMs =
+            typeof playback.position === 'number'
+              ? playback.position
+              : typeof playback.positionMs === 'number'
+                ? playback.positionMs
+                : typeof playback.current_position_ms === 'number'
+                  ? playback.current_position_ms
+                  : 0;
+          // 尝试定位当前行索引
+          let currentIndex = -1;
+          try {
+            const slice = LyricParser.getSlice(lines, positionMs);
+            const currentText = (slice.recentPast?.length ? slice.recentPast[slice.recentPast.length - 1]?.text : '') || '';
+            if (currentText) {
+              const sanitizedCurrent = sanitize(currentText);
+              currentIndex = cleanTexts.findIndex(t => t === sanitizedCurrent);
+            }
+          } catch {}
+          // 选取五句（优先中心对齐），不足时用前/后补齐
+          const pickFive = (arr: string[], center: number) => {
+            if (!arr.length) return [];
+            if (center < 0) return arr.slice(0, 5);
+            let start = Math.max(0, center - 2);
+            if (start + 5 > arr.length) start = Math.max(0, arr.length - 5);
+            return arr.slice(start, Math.min(arr.length, start + 5));
+          };
+          const aroundFive = pickFive(cleanTexts, currentIndex);
+          five = aroundFive.length ? aroundFive : cleanTexts.slice(0, 5);
+          fullLyrics = cleanTexts.join('\n');
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!five.length) five = ['（未能获取歌词）'];
+    if (!fullLyrics) fullLyrics = '（未能获取歌词）';
+
+    const pieces = [
+      `现在的场景是{{user}}和{{char}}正在听歌,歌曲的名字是${title},{{char}}是否知道歌名取决于{{char}}是否明确被告知或者{{char}}曾经听过这首歌`,
+      `歌曲的作者是${artist},{{char}}是否知道这个信息也同上文一样`,
+      `{{char}}和{{user}}目前明确当前正在听的几句(也就是{{char}}被明确告知的歌词内容)是:`,
+      five.map((t, i) => `第${i + 1}句：${t}`).join('\n'),
+      `本歌曲的全部歌词如下:\n${fullLyrics}`,
+      '接下来根据歌名和歌曲作者(作者的风格也是对歌曲的一种描述)以及歌词进行联网查询,获取到曲子的风格,作为接下来创作{{char}}的回复的参考信息之一,如果不能进行联网查询信息,那么直接根据当前获得的歌词作为回复的参考信息',
+      `Now the scene is that {{user}} and {{char}} are listening to a song. The name of the song is ${title}. Whether {{char}} knows the song title depends on whether {{char}} has been explicitly told or has heard the song before.`,
+      `The artist of the song is ${artist}. Whether {{char}} knows this information is the same as above.`,
+      `The lines that {{char}} and {{user}} are currently sure are playing (i.e., the lyrics that {{char}} has been explicitly told) are:`,
+      five.map((t, i) => `Line ${i + 1}: ${t}`).join('\n'),
+      `The full lyrics of the song are as follows:\n${fullLyrics}`,
+      `Next, search online based on the song title, the artist (the artist's style is also a description of the song), and the lyrics to get the style of the song as one of the references for creating {{char}}'s reply. If online search is not available, directly use the lyrics obtained currently as the reference for the reply.`,
+    ];
+    const content = pieces.join('\n');
+    const injection = {
+      is_user: false,
+      name: 'NeteaseMusic',
+      send_date: Date.now(),
+      mes: content,
+      extra: { type: 'narrator' },
+    };
+    const lastUserIndex = (() => {
+      for (let i = chat.length - 1; i >= 0; i--) {
+        if (chat[i]?.is_user) return i;
+      }
+      return -1;
+    })();
+    if (lastUserIndex >= 0) chat.splice(lastUserIndex, 0, injection);
+    else chat.push(injection);
+  } catch {
+    // ignore
+  }
 };
 // ------------------------------------------------------------------------------------------------
 // 5. 界面组件 (UI Components)
@@ -1343,7 +1608,7 @@ const SyncStatusBar = {
       }
       
       if (playback.title && playback.artist) {
-        const status = `${playback.isPlaying ? '▶️' : '⏸️'} ${playback.title} - ${playback.artist}`;
+        const status = `${playback.isPlaying ? '⏸️' : '▶️'} ${playback.title} - ${playback.artist}`;
         this.updateStatus(status);
       } else {
         this.updateStatus('正在同步播放状态...');
@@ -1379,22 +1644,31 @@ const FloatingBall = {
     
     // 点击显示音乐窗口（跟随悬浮球位置）
     ball.addEventListener('click', () => {
-      if (isDragging) return;
-      MusicWindow.showAtElement(ball);
+      if (didDrag) {
+        didDrag = false;
+        return;
+      }
+      if (MusicWindow.isVisible) {
+        MusicWindow.hide();
+      } else {
+        MusicWindow.showAtElement(ball);
+      }
     });
     
     // 拖拽功能
     let isDragging = false;
+    let didDrag = false;
+    const dragThreshold = 3;
     let startX = 0, startY = 0, startLeft = 0, startTop = 0;
     
     ball.addEventListener('mousedown', (e) => {
       isDragging = true;
+      didDrag = false;
       startX = e.clientX;
       startY = e.clientY;
       const rect = ball.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
-      MusicWindow.hide();
       
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
@@ -1404,6 +1678,11 @@ const FloatingBall = {
       if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+      if (!didDrag && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
+        didDrag = true;
+        MusicWindow.hide();
+      }
+      if (!didDrag) return;
       ball.style.left = `${startLeft + dx}px`;
       ball.style.top = `${startTop + dy}px`;
       ball.style.right = 'auto';
@@ -1428,6 +1707,7 @@ const FloatingBall = {
     if (this.element) {
       this.element.style.display = 'none';
       this.isVisible = false;
+      MusicWindow.hide();
     }
   },
   
@@ -1444,8 +1724,12 @@ const MusicWindow = {
   element: null as HTMLElement | null,
   isVisible: false,
   dockedInPanel: false,
+  lastPlayback: null as any,
+  statusUpdateHandler: null as ((event: Event) => void) | null,
+  refreshInFlight: false,
   
   create() {
+    this.stopInfoUpdater();
     // 如果已存在则移除
     const existing = document.getElementById('netease-music-window');
     if (existing) existing.remove();
@@ -1486,7 +1770,7 @@ const MusicWindow = {
     
     const coverFallback = document.createElement('div');
     coverFallback.id = 'music-window-cover-fallback';
-    coverFallback.innerHTML = '<i class="fa-solid fa-music" style="font-size: 48px; color: rgba(255, 255, 255, 0.5);"></i>';
+    coverFallback.innerHTML = '<i class="fa-solid fa-music"></i>';
     
     coverContainer.appendChild(coverImg);
     coverContainer.appendChild(coverFallback);
@@ -1537,13 +1821,41 @@ const MusicWindow = {
     this.startInfoUpdater();
   },
   
+  async refreshFromBackend() {
+    if (this.refreshInFlight) return;
+    this.refreshInFlight = true;
+    try {
+      const settings = getSettings();
+      const baseUrl = settings?.neteaseMusicBaseUrl || MusicApi.baseUrl;
+      const cookie = settings?.neteaseMusicCookie || MusicApi.cookie || '';
+      if (!baseUrl || !cookie) return;
+      const r = await fetch(`${baseUrl}/current`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie }),
+      });
+      const j = await r.json().catch(() => null);
+      if (j && !j.error) {
+        this.lastPlayback = j;
+        this.updateDisplay(j);
+        dispatchStatusUpdate(j);
+      }
+    } catch {
+      // ignore
+    } finally {
+      this.refreshInFlight = false;
+    }
+  },
+  
   showAtElement(anchor: HTMLElement) {
     if (!this.element) this.create();
     if (!this.element) return;
     const rect = anchor.getBoundingClientRect();
     const win = this.element;
+    document.body.appendChild(win);
+    win.style.zIndex = '2147483647';
     win.style.position = 'fixed';
-    win.style.display = 'block';
+    win.style.display = 'flex';
     win.style.bottom = '';
     win.style.right = '';
     const margin = 8;
@@ -1551,57 +1863,68 @@ const MusicWindow = {
     let top = rect.top;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const width = 260;
-    const height = 120;
+    const width = win.offsetWidth || 200;
+    const height = win.offsetHeight || 100;
     if (left + width > vw) {
       left = rect.left - width - margin;
     }
     if (top + height > vh) {
       top = Math.max(0, vh - height - margin);
     }
-    win.style.left = `${Math.max(0, left)}px`;
+    win.style.left = `${Math.max(8, left)}px`;
     win.style.top = `${Math.max(0, top)}px`;
     this.isVisible = true;
     this.dockedInPanel = false;
     this.updateDisplay();
+    void this.refreshFromBackend();
   },
   
   showDockedInPanel() {
     if (!this.element) this.create();
     if (!this.element) return;
-    const panel = document.querySelector('.netease-music-panel-content') as HTMLElement
-      || document.getElementById('extensions_settings') as HTMLElement;
+    const anchor = document.getElementById('nm-fixed-anchor') as HTMLElement | null;
     const win = this.element;
     win.style.position = 'relative';
-    win.style.display = 'block';
-    win.style.width = '220px';
-    win.style.marginTop = '8px';
+    win.style.display = 'flex';
+    win.style.width = '200px';
     win.style.left = '';
     win.style.top = '';
     win.style.bottom = '';
     win.style.right = '';
-    if (panel) {
-      panel.appendChild(win);
+    if (anchor) {
+      anchor.appendChild(win);
     } else {
       document.body.appendChild(win);
+      win.style.position = 'fixed';
+      win.style.bottom = '150px';
+      win.style.right = '20px';
     }
     this.isVisible = true;
     this.dockedInPanel = true;
     this.updateDisplay();
+    void this.refreshFromBackend();
   },
   
   startInfoUpdater() {
-    // 每3秒更新一次显示信息
-    setInterval(() => {
+    if (this.statusUpdateHandler) return;
+    this.statusUpdateHandler = (event: Event) => {
+      this.lastPlayback = (event as CustomEvent).detail ?? null;
       this.updateDisplay();
-    }, 3000);
+    };
+    window.addEventListener('netease-music-status-update', this.statusUpdateHandler);
   },
   
-  updateDisplay() {
+  stopInfoUpdater() {
+    if (!this.statusUpdateHandler) return;
+    window.removeEventListener('netease-music-status-update', this.statusUpdateHandler);
+    this.statusUpdateHandler = null;
+  },
+  
+  updateDisplay(playback?: any) {
     if (!this.element || !this.isVisible) return;
     
-    const currentSong = PlayerState.currentSong;
-    const isPlaying = PlayerState.isPlaying;
+    const currentSong = playback ?? this.lastPlayback;
+    const isPlaying = !!currentSong?.isPlaying;
     
     // 更新封面
     const coverImg = document.getElementById('music-window-cover') as HTMLImageElement;
@@ -1631,14 +1954,14 @@ const MusicWindow = {
     const statusText = document.getElementById('music-window-status-text');
     
     if (currentSong) {
-      if (titleEl) titleEl.textContent = currentSong.name || '未知歌曲';
+      if (titleEl) titleEl.textContent = currentSong.title || '未知歌曲';
       if (artistEl) artistEl.textContent = currentSong.artist || '未知艺术家';
-      if (statusIcon) statusIcon.textContent = isPlaying ? '▶️' : '⏸️';
+      if (statusIcon) statusIcon.textContent = isPlaying ? '⏸️' : '▶️';
       if (statusText) statusText.textContent = isPlaying ? '播放中' : '已暂停';
     } else {
       if (titleEl) titleEl.textContent = '无歌曲播放';
       if (artistEl) artistEl.textContent = '未知艺术家';
-      if (statusIcon) statusIcon.textContent = '⏸️';
+      if (statusIcon) statusIcon.textContent = '▶️';
       if (statusText) statusText.textContent = '未连接';
     }
   },
@@ -1836,6 +2159,10 @@ async function initExtensionPanel() {
 
 // 状态更新事件分发函数
 function dispatchStatusUpdate(playback: { title?: string; artist?: string; isPlaying?: boolean } | null) {
+  MusicWindow.lastPlayback = playback;
+  if (MusicWindow.isVisible) {
+    MusicWindow.updateDisplay(playback);
+  }
   // 更新扩展栏面板
   if (window.NeteaseMusicExtensionPanel) {
     window.NeteaseMusicExtensionPanel.updatePlaybackStatus(playback);

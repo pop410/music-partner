@@ -6,6 +6,7 @@
     "js": "dist/index.js",
     "css": "dist/index.css",
     "loading_order": 100,
+    "generate_interceptor": "neteaseMusicGenerateInterceptor",
     "requires": [],
     "optional": [],
     "auto_update": true,
