@@ -141,6 +141,7 @@ app.post('/playlist/detail', (req, res) => {
 
 // Get current playback status from helper exe or Windows Media Control (fallback)
 let useRealApiFlag = false;
+let mobileRealtimeEnabled = false;
 const mediaCfgFile = path.join(__dirname, 'media_enable.json');
 const helperPort = Number(process.env.MUSIC_HELPER_PORT || 3131);
 let helperProcess = null;
@@ -268,7 +269,7 @@ function callHelperCurrent() {
 
 async function getTermuxPlayback() {
   const isTermux = 'TERMUX_VERSION' in process.env;
-  if (!isTermux) return null;
+  if (!isTermux || !mobileRealtimeEnabled) return null;
 
   return new Promise(resolve => {
     const proc = cp.spawn('termux-notification-list', [], { shell: false });
@@ -325,6 +326,11 @@ const getCurrentPlayback = async () => {
 
 app.get('/media/status', (_req, res) => {
   res.json({ enabled: useRealApiFlag, helper: !!helperProcess });
+});
+
+app.post('/media/enable-mobile', (req, res) => {
+  mobileRealtimeEnabled = !!req.body?.enable;
+  res.json({ ok: true, enabled: mobileRealtimeEnabled });
 });
 
 app.post('/media/enable', (req, res) => {
