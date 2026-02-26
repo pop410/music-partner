@@ -1657,7 +1657,7 @@ const FloatingBall = {
     this.element.style.width = '50px';
     this.element.style.height = '50px';
     this.element.style.borderRadius = '50%';
-    this.element.style.backgroundColor = 'rgba(34, 139, 34, 0.8)';
+    this.element.style.backgroundColor = 'rgba(241, 132, 196, 0.8)';
     this.element.style.cursor = 'pointer';
     this.element.style.display = 'flex';
     this.element.style.alignItems = 'center';
@@ -1683,7 +1683,7 @@ const FloatingBall = {
         this.dragStartY = clientY - this.element!.getBoundingClientRect().top;
         this.element!.style.transition = 'none';
         this.element!.style.transform = 'scale(1.1)';
-        this.element!.style.backgroundColor = 'rgba(255, 69, 0, 0.8)';
+        this.element!.style.backgroundColor = 'rgba(91, 147, 203, 0.8)';
     };
 
     // 鼠标事件
