@@ -895,8 +895,16 @@ async function initializePlugin() {
 
   // Register prompt injector (it will only return data if service is active)
   if (context.registerPromptInjector) {
-    context.registerPromptInjector('neteaseMusic', musicPromptGenerator);
-    context.registerPromptInjector('neteaseMusicText', musicPromptTextGenerator);
+    (context as any).registerPromptInjector('neteaseMusic', {
+      depth: 0,
+      order: 98,
+      injector: musicPromptGenerator
+    });
+    (context as any).registerPromptInjector('neteaseMusicText', {
+      depth: 0,
+      order: 98,
+      injector: musicPromptTextGenerator
+    });
   } else {
     console.warn('[Music] registerPromptInjector not available, skipping prompt injection registration.');
   }

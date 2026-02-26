@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("netease-helper")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+29edcac68b02de4d62e4f88486f4de3668b250b7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dc53cb0fd87055d48b8a22f4022655ae13841e36")]
 [assembly: System.Reflection.AssemblyProductAttribute("netease-helper")]
 [assembly: System.Reflection.AssemblyTitleAttribute("netease-helper")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
