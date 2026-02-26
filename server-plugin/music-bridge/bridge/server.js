@@ -405,8 +405,7 @@ app.post('/current', async (req, res) => {
 
 // Simple mobile setup page (instructions + download)
 app.get('/mobile/setup', (req, res) => {
-  const localIp = getLocalIp();
-  const baseUrl = `http://${localIp}:${port}`;
+  const baseUrl = `http://127.0.0.1:${port}`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(`
     <html><head><title>Mobile Setup</title></head>
