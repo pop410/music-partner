@@ -288,19 +288,11 @@ async function getTermuxPlayback() {
 
     if (!musicNotification) return null;
 
-    // Log the entire notification object for debugging
-    console.log('[bridge] MUSIC_NOTIFICATION_OBJECT:', JSON.stringify(musicNotification, null, 2));
-
-    // New logic: determine playback state from notification actions
-    let isPlaying = false;
-    if (Array.isArray(musicNotification.actions)) {
-      // If a "Pause" action is present, it means the music is currently playing.
-      isPlaying = musicNotification.actions.some(action => action.title === '暂停');
-    }
-
+    // Final fallback: If a notification exists, assume it's playing.
+    // This is the most robust solution given the permission and API limitations.
     return {
       source: 'termux',
-      isPlaying,
+      isPlaying: true,
       title: musicNotification.title,
       artist: musicNotification.content,
       album: ''
