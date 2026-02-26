@@ -450,17 +450,20 @@ app.post('/current', async (req, res) => {
 
 // Simple mobile setup page (instructions + download)
 app.get('/mobile/setup', (req, res) => {
-  const baseUrl = `http://127.0.0.1:${port}`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(`
-    <html><head><title>Mobile Setup</title></head>
-    <body>
-      <h3>Android 一键配置</h3>
-      <p>请在同一 Wi-Fi 下，安装 Tasker（官方版本）。</p>
-      <p>桥接地址：<code>${baseUrl}</code></p>
-      <p>令牌：<code>${apiToken || '(未设置)'}</code></p>
-      <p><a href="/mobile/tasker.xml" download>下载 Tasker 配置（XML）</a></p>
-      <p>导入后授予通知读取与网络权限即可自动上报当前播放。</p>
+    <html><head><title>手机端监听配置 (Termux)</title></head>
+    <body style="font-family: sans-serif; line-height: 1.6;">
+      <h3>手机端监听配置 (Termux-API 方案)</h3>
+      <p>此方案通过 Termux-API 直接读取系统通知，比 Tasker 更稳定。</p>
+      <h4>步骤 1：安装 Termux:API 安卓应用</h4>
+      <p>这是最关键的一步。您必须手动安装一个名为 <strong>Termux:API</strong> 的配套应用。推荐从 F-Droid 应用商店下载。</p>
+      <p><a href="https://f-droid.org/packages/com.termux.api/" target="_blank"><strong>前往 F-Droid 下载 Termux:API</strong></a></p>
+      <p>安装后，请打开它，并授予所有它请求的权限。</p>
+      <h4>步骤 2：插件自动安装依赖</h4>
+      <p>插件会在启动时自动在 Termux 内部安装所需的命令行工具 (<code>termux-api</code>)，您无需任何操作。</p>
+      <h4>步骤 3：启用监听</h4>
+      <p>回到 SillyTavern 的插件面板，找到“实时监听”部分，打开“手机端监听 (Termux)”的开关即可。</p>
     </body></html>
   `);
 });
