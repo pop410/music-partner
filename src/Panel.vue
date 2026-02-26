@@ -796,6 +796,11 @@ async function checkMobileListener() {
       mobileListenerClass.value = age < 2 * 60 * 1000 ? 'text-green-600' : 'text-yellow-600'
       return
     }
+    if (j2?.source === 'termux' && j2.isPlaying) {
+      mobileListenerText.value = '手机推送：正常'
+      mobileListenerClass.value = 'text-green-600'
+      return
+    }
     mobileListenerText.value = '手机推送：未收到'
     mobileListenerClass.value = 'text-gray-400'
   } catch {
