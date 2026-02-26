@@ -211,9 +211,6 @@
                     <input type="checkbox" v-model="mobileRealtimeEnabled" @change="enableMobileRealtime(mobileRealtimeEnabled)" />
                     <span class="nm-slider"></span>
                   </label>
-                  <button @click="checkMobileListener" class="nm-accent-btn text-white py-0.5 px-1.5 rounded text-xs">
-                    <i class="fa-solid fa-sync-alt"></i>
-                  </button>
                 </div>
                 <div class="text-xs text-gray-500">
                   <span v-if="mobileRealtimeEnabled" :class="mobileListenerClass">{{ mobileListenerText }}</span>
