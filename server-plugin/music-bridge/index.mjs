@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import process from 'node:process';
 import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 export const info = {
   id: 'music-bridge',
@@ -128,36 +128,45 @@ function spawnBridge() {
   }
 
   // Auto install missing deps on first start
+  const start = async () => {
+    const nodeExec = process.execPath || 'node';
+    console.info(`[music-bridge] starting bridge: ${nodeExec} ${serverFile}`);
+    console.info(`[music-bridge] cwd: ${bridgeDir}`);
+    child = spawn(nodeExec, [serverFile], {
+      cwd: bridgeDir,
+      env: envForBridge(),
+      shell: false,
+      windowsHide: true,
+    });
+  
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d) => log('stdout', d));
+    child.stderr.on('data', (d) => log('stderr', d));
+    child.on('error', (e) => log('error', e?.message || String(e)));
+    child.on('close', (code, sig) => {
+      log('close', `exitCode=${code} signal=${sig ?? 'null'}`);
+      child = null;
+      if (!restarting) {
+        setTimeout(spawnBridge, 1000);
+      }
+    });
+  };
   if (needDepsInstall()) {
-    const ok = await runInstall();
-    if (!ok) {
-      console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
-      return;
-    }
+    runInstall()
+      .then(ok => {
+        if (!ok) {
+          console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
+          return;
+        }
+        start();
+      })
+      .catch(() => {
+        console.error('[music-bridge] dependencies installation failed; please run npm install manually in bridge directory');
+      });
+    return;
   }
-
-  const nodeExec = process.execPath || 'node';
-  console.info(`[music-bridge] starting bridge: ${nodeExec} ${serverFile}`);
-  console.info(`[music-bridge] cwd: ${bridgeDir}`);
-  child = spawn(nodeExec, [serverFile], {
-    cwd: bridgeDir,
-    env: envForBridge(),
-    shell: false,
-    windowsHide: true,
-  });
-
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (d) => log('stdout', d));
-  child.stderr.on('data', (d) => log('stderr', d));
-  child.on('error', (e) => log('error', e?.message || String(e)));
-  child.on('close', (code, sig) => {
-    log('close', `exitCode=${code} signal=${sig ?? 'null'}`);
-    child = null;
-    if (!restarting) {
-      setTimeout(spawnBridge, 1000);
-    }
-  });
+  start();
 }
 
 function stopBridge() {
