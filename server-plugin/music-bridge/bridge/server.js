@@ -288,6 +288,9 @@ async function getTermuxPlayback() {
 
     if (!musicNotification) return null;
 
+    // Log the entire notification object for debugging
+    console.log('[bridge] MUSIC_NOTIFICATION_OBJECT:', JSON.stringify(musicNotification, null, 2));
+
     // New logic: determine playback state from notification actions
     let isPlaying = false;
     if (Array.isArray(musicNotification.actions)) {
