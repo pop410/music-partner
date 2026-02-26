@@ -80,27 +80,6 @@
         <!-- 当前播放信息 -->
         <div id="nm-fixed-anchor" class="bg-gray-50 dark:bg-gray-800 rounded p-3" v-if="currentSong">
           <div class="flex items-center gap-3">
-            <!-- 唱片封面 -->
-            <div class="relative w-16 h-16 flex-shrink-0">
-               <!-- 唱片背景 -->
-               <div class="absolute inset-0 rounded-full bg-black border-2 border-gray-700 shadow-lg" 
-                    :class="{'animate-spin-slow': currentSong.isPlaying}"></div>
-               <!-- 封面图片 -->
-               <div class="absolute inset-0 flex items-center justify-center">
-                 <img v-if="currentSong.coverUrl" :src="getCoverUrl(currentSong.coverUrl)" 
-                      class="w-16 h-16 rounded-full object-cover" 
-                      :class="{'animate-spin-slow': currentSong.isPlaying}"
-                      style="animation-direction: normal;" />
-                 <div v-else class="w-16 h-16 rounded-full bg-gray-600 flex items-center justify-center text-xs text-gray-300">
-                   <i class="fa-solid fa-music"></i>
-                 </div>
-               </div>
-               <!-- 中心孔 -->
-               <div class="absolute inset-0 flex items-center justify-center">
-                 <div class="w-3 h-3 rounded-full bg-white border border-gray-300 z-10"></div>
-               </div>
-            </div>
-            
             <div class="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
               <div class="font-bold text-base truncate" :title="currentSong.title">{{ currentSong.title || '未知歌曲' }}</div>
               <div class="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
