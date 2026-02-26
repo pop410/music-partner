@@ -7,10 +7,23 @@ const path = require('path');
 const crypto = require('crypto');
 const cp = require('child_process');
 const http = require('http');
+const os = require('os');
 const { cloudsearch, lyric, song_url, login_status, login_cellphone, user_playlist, playlist_detail } = NCM;
 const login_qr_key = NCM.login_qr_key;
 const login_qr_create = NCM.login_qr_create;
 const login_qr_check = NCM.login_qr_check;
+
+function getLocalIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -405,9 +418,8 @@ app.post('/current', async (req, res) => {
 
 // Simple mobile setup page (instructions + download)
 app.get('/mobile/setup', (req, res) => {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  const baseHost = req.headers.host;
-  const baseUrl = `${proto}://${baseHost}`;
+  const localIp = getLocalIp();
+  const baseUrl = `http://${localIp}:${port}`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(`
     <html><head><title>Mobile Setup</title></head>
@@ -416,16 +428,15 @@ app.get('/mobile/setup', (req, res) => {
       <p>请在同一 Wi-Fi 下，安装 Tasker（官方版本）。</p>
       <p>桥接地址：<code>${baseUrl}</code></p>
       <p>令牌：<code>${apiToken || '(未设置)'}</code></p>
-      <p><a href="${baseUrl}/mobile/tasker.xml" download>下载 Tasker 配置（XML）</a></p>
+      <p><a href="/mobile/tasker.xml" download>下载 Tasker 配置（XML）</a></p>
       <p>导入后授予通知读取与网络权限即可自动上报当前播放。</p>
     </body></html>
   `);
 });
 
 app.get('/mobile/tasker.xml', (req, res) => {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  const baseHost = req.headers.host;
-  const baseUrl = `${proto}://${baseHost}`;
+  const localIp = getLocalIp();
+  const baseUrl = `http://${localIp}:${port}`;
   const token = apiToken || '';
   // Tasker Project: Notification -> HTTP Request
   const xml = `<?xml version="1.0" encoding="utf-8"?>
