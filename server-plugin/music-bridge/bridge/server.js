@@ -298,6 +298,7 @@ async function getTermuxPlayback() {
         proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
         proc.on('error', reject);
       });
+      console.log('[bridge] DUMPSYS_OUTPUT:', mediaSessionOutput);
       isPlaying = /state=PlaybackState .* state=3,/.test(mediaSessionOutput);
     } catch (dumpsysError) {
       console.warn(`[bridge] dumpsys failed ('${dumpsysError.message}'), falling back to isPlaying=true.`);
