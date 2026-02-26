@@ -288,21 +288,11 @@ async function getTermuxPlayback() {
 
     if (!musicNotification) return null;
 
-    let isPlaying = true; // Default to true as a fallback
-    try {
-      const mediaSessionOutput = await new Promise((resolve, reject) => {
-        // Use absolute path for dumpsys
-        const proc = cp.spawn('/system/bin/dumpsys', ['media_session'], { shell: false });
-        let stdout = '';
-        proc.stdout.on('data', (data) => (stdout += data));
-        proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
-        proc.on('error', reject);
-      });
-      console.log('[bridge] DUMPSYS_OUTPUT:', mediaSessionOutput);
-      isPlaying = /state=PlaybackState .* state=3,/.test(mediaSessionOutput);
-    } catch (dumpsysError) {
-      console.warn(`[bridge] dumpsys failed ('${dumpsysError.message}'), falling back to isPlaying=true.`);
-      // Fallback is already handled by the default value of isPlaying
+    // New logic: determine playback state from notification actions
+    let isPlaying = false;
+    if (Array.isArray(musicNotification.actions)) {
+      // If a "Pause" action is present, it means the music is currently playing.
+      isPlaying = musicNotification.actions.some(action => action.title === '暂停');
     }
 
     return {
