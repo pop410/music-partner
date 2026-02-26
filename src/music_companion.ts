@@ -896,13 +896,11 @@ async function initializePlugin() {
   // Register prompt injector (it will only return data if service is active)
   if (context.registerPromptInjector) {
     (context as any).registerPromptInjector('neteaseMusic', {
-      type: 'user',
       depth: 4,
       order: 9,
       injector: musicPromptGenerator
     });
     (context as any).registerPromptInjector('neteaseMusicText', {
-      type: 'user',
       depth: 4,
       order: 9,
       injector: musicPromptTextGenerator
