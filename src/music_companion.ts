@@ -896,13 +896,15 @@ async function initializePlugin() {
   // Register prompt injector (it will only return data if service is active)
   if (context.registerPromptInjector) {
     (context as any).registerPromptInjector('neteaseMusic', {
-      depth: 0,
-      order: 98,
+      type: 'user',
+      depth: 4,
+      order: 9,
       injector: musicPromptGenerator
     });
     (context as any).registerPromptInjector('neteaseMusicText', {
-      depth: 0,
-      order: 98,
+      type: 'user',
+      depth: 4,
+      order: 9,
       injector: musicPromptTextGenerator
     });
   } else {
@@ -1729,7 +1731,7 @@ const FloatingBall = {
       onMove(e.clientX, e.clientY);
     });
 
-    window.addEventListener('touchmove', (e) => {
+    this.element.addEventListener('touchmove', (e) => {
       if (e.touches.length === 1) {
         const x = e.touches[0].clientX;
         const y = e.touches[0].clientY;
@@ -1761,7 +1763,7 @@ const FloatingBall = {
     };
 
     window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchend', onEnd);
+    this.element.addEventListener('touchend', onEnd);
 
     this.element.addEventListener('click', (e) => {
       if (moved) {
