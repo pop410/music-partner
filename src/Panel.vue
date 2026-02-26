@@ -19,7 +19,7 @@
               <div class="text-base font-semibold">🔒 安全免责声明</div>
               <div class="text-sm leading-6">
                 <div>1. 本插件仅本地存储/使用网易云Cookie，不上传、不收集、不传输任何账号信息,插件是开源的大家可以随时查看风险；</div>
-                <div>2. 官方发布渠道目前仅为Discord「类脑ΟΔΥΣΣΕΙΑ」社区，非官方版本请勿使用，或者你认为本插件具有你无法承担的风险，也请勿使用；</div>
+                <div>2. 官方发布渠道目前仅为Discord社区，非官方版本请勿使用，或者你认为本插件具有你无法承担的风险，也请勿使用；</div>
                 <div>3. 因频繁上传获取cookie(风控风险)、使用非官方版本导致的账号风险，作者不承担任何责任</div>
               </div>
               <div class="flex justify-end">
