@@ -272,15 +272,27 @@ async function getTermuxPlayback() {
   if (!isTermux || !mobileRealtimeEnabled) return null;
 
   return new Promise(resolve => {
+    console.log('[music-bridge] Checking Termux notifications...');
     const proc = cp.spawn('termux-notification-list', [], { shell: false });
     let stdout = '';
+    let stderr = '';
     proc.stdout.on('data', (data) => (stdout += data));
+    proc.stderr.on('data', (data) => (stderr += data));
+
     proc.on('close', (code) => {
-      if (code !== 0) return resolve(null);
+      console.log(`[music-bridge] termux-notification-list exited with code ${code}`);
+      if (stderr) {
+        console.error('[music-bridge] termux-notification-list stderr:', stderr);
+      }
+      if (code !== 0) {
+        return resolve(null);
+      }
+      console.log('[music-bridge] termux-notification-list stdout:', stdout);
       try {
         const notifications = JSON.parse(stdout);
         const musicNotification = notifications.find(n => n.packageName === 'com.netease.cloudmusic');
         if (musicNotification) {
+          console.log('[music-bridge] Found Netease Cloud Music notification:', musicNotification);
           resolve({
             source: 'termux',
             isPlaying: true, // Assume playing if notification is present
@@ -289,13 +301,19 @@ async function getTermuxPlayback() {
             album: '',
           });
         } else {
+          console.log('[music-bridge] Netease Cloud Music notification not found. Available packages:', [...new Set(notifications.map(n => n.packageName))]);
           resolve(null);
         }
-      } catch {
+      } catch (e) {
+        console.error('[music-bridge] Failed to parse termux-notification-list JSON:', e.message);
         resolve(null);
       }
     });
-    proc.on('error', () => resolve(null));
+
+    proc.on('error', (err) => {
+      console.error('[music-bridge] Failed to spawn termux-notification-list:', err);
+      resolve(null);
+    });
   });
 }
 
