@@ -271,32 +271,20 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const fetchTermuxNotifications = async () => {
   const runOnce = () =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const proc = cp.spawn('termux-notification-list', [], { shell: false });
       let stdout = '';
-      let stderr = '';
       proc.stdout.on('data', (data) => (stdout += data));
-      proc.stderr.on('data', (data) => (stderr += data));
-      proc.on('close', (code) => resolve({ stdout, stderr, code }));
-      proc.on('error', (err) => resolve({ stdout: '', stderr: err.message, code: -1 }));
+      proc.on('close', (code) => (code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`))));
+      proc.on('error', reject);
     });
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    const result = await runOnce();
-    if (result.code !== 0) {
-      const errText = String(result.stderr || '').trim();
-      console.warn(`[bridge] termux-notification-list failed (${result.code}): ${errText}`);
-      if (attempt === 0) {
-        await delay(200);
-        continue;
-      }
-      return [];
-    }
-
-    const text = String(result.stdout || '').trim();
+    const raw = await runOnce();
+    const text = String(raw || '').trim();
     if (!text) {
       if (attempt === 0) {
-        await delay(200);
+        await delay(150);
         continue;
       }
       return [];
@@ -305,7 +293,7 @@ const fetchTermuxNotifications = async () => {
       return JSON.parse(text);
     } catch (e) {
       if (attempt === 0) {
-        await delay(200);
+        await delay(150);
         continue;
       }
       console.warn(`[bridge] termux-notification-list JSON parse failed: ${e.message}`);
