@@ -267,50 +267,20 @@ function callHelperCurrent() {
   });
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const fetchTermuxNotifications = async () => {
-  const runOnce = () =>
-    new Promise((resolve, reject) => {
-      const proc = cp.spawn('termux-notification-list', [], { shell: false });
-      let stdout = '';
-      proc.stdout.on('data', (data) => (stdout += data));
-      proc.on('close', (code) => (code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`))));
-      proc.on('error', reject);
-    });
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const raw = await runOnce();
-    const text = String(raw || '').trim();
-    if (!text) {
-      if (attempt === 0) {
-        await delay(150);
-        continue;
-      }
-      return [];
-    }
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      if (attempt === 0) {
-        await delay(150);
-        continue;
-      }
-      console.warn(`[bridge] termux-notification-list JSON parse failed: ${e.message}`);
-      return [];
-    }
-  }
-
-  return [];
-};
-
 async function getTermuxPlayback() {
   const isTermux = 'TERMUX_VERSION' in process.env;
   if (!isTermux || !mobileRealtimeEnabled) return null;
 
   try {
-    const notifications = await fetchTermuxNotifications();
-    if (!Array.isArray(notifications) || notifications.length === 0) return null;
+    const notificationJson = await new Promise((resolve, reject) => {
+      const proc = cp.spawn('termux-notification-list', [], { shell: false });
+      let stdout = '';
+      proc.stdout.on('data', (data) => (stdout += data));
+      proc.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(`Exit code ${code}`)));
+      proc.on('error', reject);
+    });
+
+    const notifications = JSON.parse(notificationJson);
     const musicNotification = notifications.find(n => 
       n.packageName === 'com.netease.cloudmusic' || 
       n.packageName === 'com.huawei.mediacontroller'
