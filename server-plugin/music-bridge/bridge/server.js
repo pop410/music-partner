@@ -268,13 +268,8 @@ function callHelperCurrent() {
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-let termuxNotificationUnavailableUntil = 0;
-let termuxNotificationLastWarnAt = 0;
-
-const shouldSkipTermuxNotifications = () => Date.now() < termuxNotificationUnavailableUntil;
 
 const fetchTermuxNotifications = async () => {
-  if (shouldSkipTermuxNotifications()) return [];
   const runOnce = () =>
     new Promise((resolve) => {
       const proc = cp.spawn('termux-notification-list', [], { shell: false });
@@ -290,14 +285,6 @@ const fetchTermuxNotifications = async () => {
     const result = await runOnce();
     if (result.code !== 0) {
       const errText = String(result.stderr || '').trim();
-      if (errText.includes('NotificationListenerService') || errText.includes('getActiveNotifications') || errText.includes('NullPointerException')) {
-        termuxNotificationUnavailableUntil = Date.now() + 60 * 1000;
-        if (Date.now() - termuxNotificationLastWarnAt > 5000) {
-          termuxNotificationLastWarnAt = Date.now();
-          console.warn(`[bridge] termux-notification-list unavailable: ${errText}`);
-        }
-        return [];
-      }
       console.warn(`[bridge] termux-notification-list failed (${result.code}): ${errText}`);
       if (attempt === 0) {
         await delay(200);
